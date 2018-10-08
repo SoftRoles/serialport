@@ -4,26 +4,77 @@ var bodyParser = require("body-parser")
 const app = express();
 var server = require('http').createServer(app);
 var io = require('socket.io')(server);
+
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
-app.use(express.static(__dirname + '/node_modules'));
-app.use(express.static(__dirname + '/public'));
 
-app.get('/', function (req, res, next) {
-  res.sendFile("index.html");
+//=========================================
+// api
+//=========================================
+const serialPort = require('serialport')
+const readline = require('@serialport/parser-readline')
+const parser = new readline()
+var serialPorts = {}
+app.get('/serialport', function (req, res) {
+  serialPort.list().then(
+    ports => res.send(ports),
+    err => res.send(err)
+  )
 });
 
-io.on('connection', function (client) {
-  console.log('Client connected...');
+app.post('/serialport/:port', function (req, res) {
+  if (serialPorts[req.params.port]) {
+    serialPorts[req.params.port].close(function (err) {
+      if (err) res.send({ error: err })
+      delete serialPorts[req.params.port]
+    })
+  }
+  serialPorts[req.params.port] = new serialPort(req.params.port, {
+    baudRate: parseInt(req.body.baudRate)
+  }, function (err) {
+    if (err) res.send({ error: err.message })
+    else {
+      serialPorts[req.params.port].pipe(parser)
+      serialPorts[req.params.port].on("data", function (chunk) {
+        console.log(chunk.toString('utf8'))
+        io.emit("data", chunk.toString('utf8'))
+      })
+      res.send({ success: "OK" })
+    }
+  })
+});
 
-  client.on('join', function (data) {
-    console.log(data);
-    client.on('messages', function (data) {
-      client.emit('broad', data);
-      client.broadcast.emit('broad', data);
-    });
-  });
+app.put("/serialport/:port", function (req, res) {
+  if (serialPorts[req.params.port]) {
+    serialPorts[req.params.port].write(req.body.buff + "\r", function (err) {
+      serialPorts[req.params.port].drain(function (err) {
+        if (err) { res.send({ error: "Error: POST: /serialport: " + err }) }
+        else res.send({ success: "OK" })
+      })
+    })
+  }
+  else res.send({error:"Port is not opened."})
 })
+
+app.delete("/serialport/:port", function (req, res) {
+  if (serialPorts[req.params.port]) {
+    serialPorts[req.params.port].close(function (err) {
+      if (err) res.send({ error: "Error: DEL: /serialport: " + err })
+      else {
+        delete serialPorts[req.params.port]
+        res.send({ success: "OK" })
+      }
+    })
+  }
+  else {
+    res.send({ error: "Port is not open." })
+  }
+})
+
+io.on('connection', function (client) {
+  console.log("A client is connected.");
+})
+
 
 server.listen(3008, function () {
   console.log("Service running on http://127.0.0.1:3008")
