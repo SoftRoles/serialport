@@ -15,14 +15,15 @@ const serialPort = require('serialport')
 const readline = require('@serialport/parser-readline')
 const parser = new readline()
 var serialPorts = {}
-app.get('/serialport', function (req, res) {
+
+app.get('/serialport/api', function (req, res) {
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
   )
 });
 
-app.post('/serialport/:port', function (req, res) {
+app.post('/serialport/api/:port', function (req, res) {
   if (serialPorts[req.params.port]) {
     serialPorts[req.params.port].close(function (err) {
       if (err) res.send({ error: err })
@@ -44,7 +45,7 @@ app.post('/serialport/:port', function (req, res) {
   })
 });
 
-app.put("/serialport/:port", function (req, res) {
+app.put("/serialport/api/:port", function (req, res) {
   if (serialPorts[req.params.port]) {
     serialPorts[req.params.port].write(req.body.buff + "\r", function (err) {
       serialPorts[req.params.port].drain(function (err) {
@@ -56,7 +57,7 @@ app.put("/serialport/:port", function (req, res) {
   else res.send({error:"Port is not opened."})
 })
 
-app.delete("/serialport/:port", function (req, res) {
+app.delete("/serialport/api/:port", function (req, res) {
   if (serialPorts[req.params.port]) {
     serialPorts[req.params.port].close(function (err) {
       if (err) res.send({ error: "Error: DEL: /serialport: " + err })
