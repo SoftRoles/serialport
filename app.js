@@ -38,9 +38,9 @@ app.post('/serialport/api/:port', function (req, res) {
       serialPorts[req.params.port].pipe(parser)
       serialPorts[req.params.port].on("data", function (chunk) {
         console.log(chunk.toString('utf8'))
-        io.emit("data", chunk.toString('utf8'))
+        io.emit("data"+req.params.port, chunk.toString('utf8'))
       })
-      res.send({ success: "OK" })
+      res.send({})
     }
   })
 });
