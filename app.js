@@ -50,7 +50,7 @@ app.put("/serialport/api/:port", function (req, res) {
     serialPorts[req.params.port].write(req.body.buff + "\r", function (err) {
       serialPorts[req.params.port].drain(function (err) {
         if (err) { res.send({ error: "Error: POST: /serialport: " + err }) }
-        else res.send({ success: "OK" })
+        else res.send({})
       })
     })
   }
