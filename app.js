@@ -8,6 +8,17 @@ var io = require('socket.io')(server);
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
 
+var passport = require('passport')
+var customStrategy = require('passport-custom').Strategy
+passport.use(new customStrategy(
+  function (req, done) {
+    User.findOne({
+      username: req.body.username
+    }, function (err, user) {
+      done(err, user);
+    });
+  }
+));
 //=========================================
 // api
 //=========================================
@@ -38,7 +49,7 @@ app.post('/serialport/api/:port', function (req, res) {
       serialPorts[req.params.port].pipe(parser)
       serialPorts[req.params.port].on("data", function (chunk) {
         console.log(chunk.toString('utf8'))
-        io.emit("data"+req.params.port, chunk.toString('utf8'))
+        io.emit("data" + req.params.port, chunk.toString('utf8'))
       })
       res.send({})
     }
@@ -54,7 +65,7 @@ app.put("/serialport/api/:port", function (req, res) {
       })
     })
   }
-  else res.send({error:"Port is not opened."})
+  else res.send({ error: "Port is not opened." })
 })
 
 app.delete("/serialport/api/:port", function (req, res) {
