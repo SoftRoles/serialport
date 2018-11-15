@@ -1,5 +1,6 @@
 var express = require('express')
 var bodyParser = require("body-parser")
+var assert = require("assert")
 
 const app = express();
 var server = require('http').createServer(app);
@@ -7,6 +8,15 @@ var io = require('socket.io')(server);
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }))
+
+var mongodb;
+var mongoClient = require("mongodb").MongoClient
+var mongodbUrl = "mongodb://127.0.0.1:27017"
+mongoClient.connect(mongodbUrl, { poolSize: 10 }, function (err, client) {
+  assert.equal(null, err);
+  mongodb = client;
+});
+
 
 var passport = require('passport')
 var customStrategy = require('passport-custom').Strategy
