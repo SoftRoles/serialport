@@ -20,15 +20,35 @@ mongoClient.connect(mongodbUrl, { poolSize: 10 }, function (err, client) {
 
 var passport = require('passport')
 var customStrategy = require('passport-custom').Strategy
-passport.use(new customStrategy(
-  function (req, done) {
-    User.findOne({
-      username: req.body.username
-    }, function (err, user) {
-      done(err, user);
-    });
+passport.use(new customStrategy(function (req, cb) {
+  const isLocalUser = req.ip.indexOf("127.0.0.1") > -1
+  if (req.headers && req.headers.authorization) {
+    var parts = req.authorization.split(" ");
+    if (parts.length == 2) {
+      var scheme = parts[0]
+      var credentials = parts[1]
+      if (/^Bearer$/i.test(scheme)) {
+        mongodb.db("auth").collection("users").findOne({ token: credentials }, function (err, user) {
+          if (err) return cb(err)
+          if (!user) { return cb(null, false); }
+          return cb(null, user);
+        });
+      }
+      else {
+        if (isLocalUser) { return cb(null, { username: "guest" }) }
+        else cb(null, false)
+      }
+    }
+    else {
+      if (isLocalUser) { return cb(null, { username: "guest" }) }
+      else cb(null, false)
+    }
   }
-));
+  else {
+    if (isLocalUser) { return cb(null, { username: "guest" }) }
+    else cb(null, false)
+  }
+}));
 //=========================================
 // api
 //=========================================
@@ -37,7 +57,8 @@ const readline = require('@serialport/parser-readline')
 const parser = new readline()
 var serialPorts = {}
 
-app.get('/serialport/api', function (req, res) {
+app.get('/serialport/api', passport.authenticate("custom", { session: false }), function (req, res) {
+  console.log(req.user)
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
