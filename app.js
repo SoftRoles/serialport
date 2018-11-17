@@ -45,7 +45,6 @@ const parser = new readline()
 var serialPorts = {}
 
 app.get('/serialport/api', passport.authenticate("custom", { session: false, failureRedirect:"/403" }), function (req, res) {
-  console.log(req.user)
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
