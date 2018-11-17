@@ -24,9 +24,9 @@ passport.use(new customStrategy(function (req, cb) {
   const isLocalUser = req.ip.indexOf("127.0.0.1") > -1
   if (req.headers &&
     req.headers.authorization &&
-    req.authorization.split(" ").length == 2 &&
-    /^Bearer$/i.test(req.authorization.split(" ")[0])) {
-    mongodb.db("auth").collection("users").findOne({ token: req.authorization.split(" ")[1] }, function (err, user) {
+    req.headers.authorization.split(" ").length == 2 &&
+    /^Bearer$/i.test(req.headers.authorization.split(" ")[0])) {
+    mongodb.db("auth").collection("users").findOne({ token: req.headers.authorization.split(" ")[1] }, function (err, user) {
       if (err) return cb(err)
       if (!user) { return cb(null, false); }
       return cb(null, user);
