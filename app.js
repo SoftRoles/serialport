@@ -28,7 +28,7 @@ function ensureLoggedIn(options) {
     else {
       if (isToken) {
         mongodb.db("auth").collection("users").findOne({ token: req.headers.authorization.split(" ")[1] }, function (err, user) {
-          req.user = err || user || { username: "local" }
+          req.user = err || user || req.user || { username: "local" }
           next()
         });
       }
