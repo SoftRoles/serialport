@@ -15,15 +15,27 @@ function ensureLoggedIn(options) {
   var setReturnTo = (options.setReturnTo === undefined) ? true : options.setReturnTo;
 
   return function (req, res, next) {
-    if ((req.ip.indexOf("127.0.0.1") === -1) && (!req.isAuthenticated || !req.isAuthenticated())) {
+    var isLocal = req.ip.indexOf("127.0.0.1") > -1
+    var isToken = req.headers && req.headers.authorization
+      && req.headers.authorization.split(" ").length == 2
+      && /^Bearer$/i.test(req.headers.authorization.split(" ")[0])
+    if (!isLocal && !isToken && (!req.isAuthenticated || !req.isAuthenticated())) {
       if (setReturnTo && req.session) {
         req.session.returnTo = req.originalUrl || req.url;
       }
       return res.redirect(url);
     }
-    else{
-      req.user = req.user || {username:"local"}
-      next()
+    else {
+      if (isToken) {
+        mongodb.db("auth").collection("users").findOne({ token: req.headers.authorization.split(" ")[1] }, function (err, user) {
+          req.user = err || user || { username: "local" }
+          next()
+        });
+      }
+      else{
+        req.user = req.user || { username: "local" }
+        next()
+      }
     }
   }
 }
