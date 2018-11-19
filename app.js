@@ -1,13 +1,39 @@
 var express = require('express')
-var bodyParser = require("body-parser")
-var assert = require("assert")
-
 const app = express();
 var server = require('http').createServer(app);
-var io = require('socket.io')(server);
 
-app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({ extended: true }))
+function ensureLoggedIn(options) {
+  if (typeof options == 'string') {
+    options = { redirectTo: options }
+  }
+  options = options || {};
+
+  var url = options.redirectTo || '/login';
+  var setReturnTo = (options.setReturnTo === undefined) ? true : options.setReturnTo;
+
+  return function (req, res, next) {
+    if ((req.ip.indexOf("127.0.0.1") === -1) && (!req.isAuthenticated || !req.isAuthenticated())) {
+      if (setReturnTo && req.session) {
+        req.session.returnTo = req.originalUrl || req.url;
+      }
+      return res.redirect(url);
+    }
+    else{
+      req.user = req.user || {username:"local"}
+      next()
+    }
+  }
+}
+
+//=========================================
+// session
+//=========================================
+var assert = require('assert');
+
+var passport = require('passport');
+
+var session = require('express-session');
+var mongodbSessionStore = require('connect-mongodb-session')(session);
 
 var mongodb;
 var mongoClient = require("mongodb").MongoClient
@@ -17,34 +43,60 @@ mongoClient.connect(mongodbUrl, { poolSize: 10 }, function (err, client) {
   mongodb = client;
 });
 
+var store = new mongodbSessionStore({
+  uri: mongodbUrl,
+  databaseName: 'auth',
+  collection: 'sessions'
+});
 
-var passport = require('passport')
-var customStrategy = require('passport-custom').Strategy
-passport.use(new customStrategy(function (req, cb) {
-  const isLocalUser = req.ip.indexOf("127.0.0.1") > -1
-  if (req.headers &&
-    req.headers.authorization &&
-    req.headers.authorization.split(" ").length == 2 &&
-    /^Bearer$/i.test(req.headers.authorization.split(" ")[0])) {
-    mongodb.db("auth").collection("users").findOne({ token: req.headers.authorization.split(" ")[1] }, function (err, user) {
-      if (err) return cb(err)
-      if (!user) { return cb(null, false); }
-      return cb(null, user);
-    });
-  }
-  else {
-    return cb(null, isLocalUser ? { username: "guest" } : false)
-  }
+store.on('error', function (error) {
+  assert.ifError(error);
+  assert.ok(false);
+});
+
+app.use(require('express-session')({
+  secret: 'This is a secret',
+  cookie: {
+    maxAge: 1000 * 60 * 60 * 24 * 7 // 1 week
+  },
+  store: store,
+  resave: true,
+  saveUninitialized: true
 }));
+
+
+passport.serializeUser(function (user, cb) {
+  cb(null, user.username);
+});
+
+passport.deserializeUser(function (username, cb) {
+  mongodb.db("auth").collection("users").findOne({ username: username }, function (err, user) {
+    if (err) return cb(err)
+    if (!user) { return cb(null, false); }
+    return cb(null, user);
+  });
+});
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+
+app.use(require('morgan')('tiny'));
+app.use(require('body-parser').json())
+app.use(require('body-parser').urlencoded({ extended: true }));
+app.use(require("cors")())
+
 //=========================================
 // api
 //=========================================
+var io = require('socket.io')(server);
 const serialPort = require('serialport')
 const readline = require('@serialport/parser-readline')
 const parser = new readline()
 var serialPorts = {}
 
-app.get('/serialport/api', passport.authenticate("custom", { session: false, failureRedirect:"/403" }), function (req, res) {
+app.get('/serialport/api', ensureLoggedIn({ redirectTo: "/403" }), function (req, res) {
+  // console.log(req.user)
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
