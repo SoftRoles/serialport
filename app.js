@@ -2,6 +2,9 @@ var express = require('express')
 const app = express();
 var server = require('http').createServer(app);
 
+//=========================================
+// authorization check
+//=========================================
 function ensureLoggedIn(options) {
   if (typeof options == 'string') {
     options = { redirectTo: options }
