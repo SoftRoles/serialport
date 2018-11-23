@@ -32,7 +32,7 @@ function ensureLoggedIn(options) {
           next()
         });
       }
-      else{
+      else {
         req.user = req.user || { username: "local" }
         next()
       }
@@ -102,13 +102,38 @@ app.use(require('body-parser').urlencoded({ extended: true }));
 app.use(require("cors")())
 
 //=========================================
+// promises
+//=========================================
+const promisify = require("util").promisify
+
+function serialWriteForPromise(port, cmd, callback) {
+  console.log("Here0")
+  if (serialPorts[port]) {
+    console.log("Here1")
+    serialPorts[port].write(cmd + "\r", function (err) {
+      console.log("Here2")
+      serialPorts[port].drain(function (err) {
+        if (err) callback("Error: POST: /serialport: " + err, "")
+        else callback(null, {})
+      })
+    })
+  }
+  else callback("Port is not opened.", null)
+}
+
+const serialWritePromise = promisify(serialWriteForPromise)
+
+
+//=========================================
 // api
 //=========================================
 var io = require('socket.io')(server);
 const serialPort = require('serialport')
 const readline = require('@serialport/parser-readline')
 const parser = new readline()
+const interval = require("interval-promise")
 var serialPorts = {}
+var intervalWrites = []
 
 app.get('/serialport/api', ensureLoggedIn({ redirectTo: "/403" }), function (req, res) {
   // console.log(req.user)
@@ -167,6 +192,42 @@ app.delete("/serialport/api/:port", function (req, res) {
   }
 })
 
+app.post('/serialport/api/interval/:port', function (req, res) {
+  let options = intervalWrites.find(item => {
+    return item.port == req.params.port && item.buff == req.body.buff
+  })
+  if (options) {
+    Object.assign(options, { interval: req.body.interval || 1000, stop: false })
+  }
+  else {
+    options = {
+      port: req.params.port,
+      buff: req.body.buff,
+      interval: req.body.interval || 1000,
+      stop: false
+    }
+  }
+  intervalWrites.push(options)
+  interval(async (iteration, stop) => {
+    if (options.stop) stop()
+    await serialWritePromise(options.port, options.buff)
+  }, 3000, { stopOnError: false })
+  res.send({})
+  // setTimeout(() => { stopInterval = true }, 5000)
+});
+
+app.delete('/serialport/api/interval/:port', function (req, res) {
+  let options = intervalWrites.find(item => {
+    return item.port == req.params.port && item.buff == req.body.buff
+  })
+  if (options) { options.stop = true; res.send({}) }
+  else res.send({ error: "port and command poair not found" })
+});
+
+
+//=========================================
+// socket
+//=========================================
 io.on('connection', function (client) {
   console.log("A client is connected.");
 })

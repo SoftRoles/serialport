@@ -1,3 +1,21 @@
 ##
 # List avaliable serialports
 http://127.0.0.1/serialport/api
+
+###
+# set intrval for periodic write
+POST http://127.0.0.1/serialport/api/interval/COM1
+content-type: application/json
+
+{
+    "buff": "PFB"
+}
+
+###
+# unset intrval for periodic write
+DELETE http://127.0.0.1/serialport/api/interval/COM1
+content-type: application/json
+
+{
+    "buff": "PFB"
+}
