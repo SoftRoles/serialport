@@ -193,27 +193,29 @@ app.delete("/serialport/api/:port", function (req, res) {
 })
 
 app.post('/serialport/api/interval/:port', function (req, res) {
-  let options = intervalWrites.find(item => {
-    return item.port == req.params.port && item.buff == req.body.buff
-  })
-  if (options) {
-    Object.assign(options, { interval: req.body.interval || 1000, stop: false })
-  }
-  else {
-    options = {
-      port: req.params.port,
-      buff: req.body.buff,
-      interval: req.body.interval || 1000,
-      stop: false
+  if (serialPorts[req.params.port]) {
+    let options = intervalWrites.find(item => {
+      return item.port == req.params.port && item.buff == req.body.buff
+    })
+    if (options) {
+      Object.assign(options, { interval: req.body.interval || 1000, stop: false })
     }
+    else {
+      options = {
+        port: req.params.port,
+        buff: req.body.buff,
+        interval: req.body.interval || 1000,
+        stop: false
+      }
+    }
+    intervalWrites.push(options)
+    interval(async (iteration, stop) => {
+      if (options.stop) stop()
+      await serialWritePromise(options.port, options.buff)
+    }, 3000, { stopOnError: false })
+    res.send({})
   }
-  intervalWrites.push(options)
-  interval(async (iteration, stop) => {
-    if (options.stop) stop()
-    await serialWritePromise(options.port, options.buff)
-  }, 3000, { stopOnError: false })
-  res.send({})
-  // setTimeout(() => { stopInterval = true }, 5000)
+  else res.send({ error: "Port is not opened." })
 });
 
 app.delete('/serialport/api/interval/:port', function (req, res) {
