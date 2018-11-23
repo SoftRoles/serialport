@@ -195,16 +195,16 @@ app.delete("/serialport/api/:port", function (req, res) {
 app.post('/serialport/api/interval/:port', function (req, res) {
   if (serialPorts[req.params.port]) {
     let options = intervalWrites.find(item => {
-      return item.port == req.params.port && item.buff == req.body.buff
+      return (item.port == req.params.port) && (item.buff == req.body.buff)
     })
     if (options) {
-      Object.assign(options, { interval: req.body.interval || 1000, stop: false })
+      Object.assign(options, { interval: Number(req.body.interval), stop: false })
     }
     else {
       options = {
         port: req.params.port,
         buff: req.body.buff,
-        interval: req.body.interval || 1000,
+        interval: Number(req.body.interval),
         stop: false
       }
     }
@@ -212,7 +212,7 @@ app.post('/serialport/api/interval/:port', function (req, res) {
     interval(async (iteration, stop) => {
       if (options.stop) stop()
       await serialWritePromise(options.port, options.buff)
-    }, 3000, { stopOnError: false })
+    }, options.interval, { stopOnError: false })
     res.send({})
   }
   else res.send({ error: "Port is not opened." })
@@ -220,10 +220,10 @@ app.post('/serialport/api/interval/:port', function (req, res) {
 
 app.delete('/serialport/api/interval/:port', function (req, res) {
   let options = intervalWrites.find(item => {
-    return item.port == req.params.port && item.buff == req.body.buff
+    return (item.port == req.params.port) && (item.buff == req.body.buff)
   })
   if (options) { options.stop = true; res.send({}) }
-  else res.send({ error: "port and command poair not found" })
+  else res.send({ error: "port and command pair not found" })
 });
 
 
