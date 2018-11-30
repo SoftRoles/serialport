@@ -102,47 +102,41 @@ app.use(require('body-parser').urlencoded({ extended: true }));
 app.use(require("cors")())
 
 //=========================================
-// promises
-//=========================================
-const promisify = require("util").promisify
-
-function serialWriteForPromise(port, cmd, callback) {
-  console.log("Here0")
-  if (serialPorts[port]) {
-    console.log("Here1")
-    serialPorts[port].write(cmd + "\r", function (err) {
-      console.log("Here2")
-      serialPorts[port].drain(function (err) {
-        if (err) callback("Error: POST: /serialport: " + err, "")
-        else callback(null, {})
-      })
-    })
-  }
-  else callback("Port is not opened.", null)
-}
-
-const serialWritePromise = promisify(serialWriteForPromise)
-
-
-//=========================================
 // api
 //=========================================
 var io = require('socket.io')(server);
 const serialPort = require('serialport')
 const readline = require('@serialport/parser-readline')
 const parser = new readline()
+const promisify = require("util").promisify
 const interval = require("interval-promise")
+const uniqid = require("uniqid")
+const _ = require("lodash")
 var serialPorts = {}
-var intervalWrites = []
 
+// port write function
+function write(port, buff, callback) {
+  if (port.isOpen) {
+    port.write(buff + "\r", function (err) {
+      port.drain(function (err) {
+        if (err) { callback(err, null) }
+        else callback(null, {})
+      })
+    })
+  }
+  else callback("Port is not opened.", null)
+}
+const writePromise = promisify(write)
+
+// root
 app.get('/serialport/api', ensureLoggedIn({ redirectTo: "/403" }), function (req, res) {
-  // console.log(req.user)
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
   )
 });
 
+// root:port
 app.post('/serialport/api/:port', function (req, res) {
   if (serialPorts[req.params.port]) {
     serialPorts[req.params.port].close(function (err) {
@@ -183,7 +177,7 @@ app.delete("/serialport/api/:port", function (req, res) {
       if (err) res.send({ error: "Error: DEL: /serialport: " + err })
       else {
         delete serialPorts[req.params.port]
-        res.send({ success: "OK" })
+        res.send({})
       }
     })
   }
@@ -192,38 +186,36 @@ app.delete("/serialport/api/:port", function (req, res) {
   }
 })
 
+app.get('/serialport/api/interval/:port', function (req, res) {
+  res.send(intervalWrites.filter(item => item.port == req.params.port))
+});
+
 app.post('/serialport/api/interval/:port', function (req, res) {
   if (serialPorts[req.params.port]) {
-    let options = intervalWrites.find(item => {
-      return (item.port == req.params.port) && (item.buff == req.body.buff)
-    })
-    if (options) {
-      Object.assign(options, { interval: Number(req.body.interval), stop: false })
-    }
-    else {
-      options = {
-        port: req.params.port,
-        buff: req.body.buff,
-        interval: Number(req.body.interval),
-        stop: false
-      }
+    let options = {
+      id: uniqid(),
+      port: req.params.port,
+      buff: req.body.buff,
+      interval: Number(req.body.interval) || 1000,
+      stop: false
     }
     intervalWrites.push(options)
     interval(async (iteration, stop) => {
       if (options.stop) stop()
       await serialWritePromise(options.port, options.buff)
     }, options.interval, { stopOnError: false })
-    res.send({})
+    res.send(options)
   }
   else res.send({ error: "Port is not opened." })
 });
 
-app.delete('/serialport/api/interval/:port', function (req, res) {
-  let options = intervalWrites.find(item => {
-    return (item.port == req.params.port) && (item.buff == req.body.buff)
-  })
-  if (options) { options.stop = true; res.send({}) }
-  else res.send({ error: "port and command pair not found" })
+app.delete('/serialport/api/interval/:port/:id', function (req, res) {
+  let index = intervalWrites.findIndex(item => item.id == req.params.id)
+  if (index > -1) {
+    intervalWrites[index].stop = true
+    res.send(intervalWrites.splice(index, 1))
+  }
+  else res.send({ error: "not found" })
 });
 
 
