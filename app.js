@@ -53,7 +53,7 @@ var mongodbSessionStore = require('connect-mongodb-session')(session);
 var mongodb;
 var mongoClient = require("mongodb").MongoClient
 var mongodbUrl = "mongodb://127.0.0.1:27017"
-mongoClient.connect(mongodbUrl, { poolSize: 10 }, function (err, client) {
+mongoClient.connect(mongodbUrl, { poolSize: 10, useNewUrlParser: true }, function (err, client) {
   assert.equal(null, err);
   mongodb = client;
 });
@@ -112,112 +112,142 @@ const promisify = require("util").promisify
 const interval = require("interval-promise")
 const uniqid = require("uniqid")
 const _ = require("lodash")
-var serialPorts = {}
+var ports = []
 
 // port write function
-function write(port, buff, callback) {
-  if (port.isOpen) {
-    port.write(buff + "\r", function (err) {
-      port.drain(function (err) {
+function portWrite(portId, buff, callback) {
+  let portIndex = ports.findIndex(port => port.id == portId)
+  if (portIndex > -1) {
+    ports[portIndex].obj.write(buff + "\r", function (err) {
+      console.log("Here1")
+      ports[portIndex].obj.drain(function (err) {
+        console.log("Here2")
         if (err) { callback(err, null) }
         else callback(null, {})
       })
     })
   }
-  else callback("Port is not opened.", null)
+  else callback()
 }
-const writePromise = promisify(write)
+const portWritePromise = promisify(portWrite)
 
-// root
-app.get('/serialport/api', ensureLoggedIn({ redirectTo: "/403" }), function (req, res) {
+// port delete function
+function portDelete(portId, callback) {
+  let portIndex = ports.findIndex(port => port.id == portId)
+  if (portIndex > -1) {
+    ports[portIndex].obj.close(function (err) {
+      if (err) callback("Error: DEL: /serialport: " + err)
+      else {
+        ports[portIndex].writes.forEach(write => {
+          write.stop = true
+        });
+        ports.splice(portIndex, 1)
+        callback()
+      }
+    })
+  }
+  else callback()
+}
+
+
+// api
+app.get('/serialport/api', ensureLoggedIn(), function (req, res) {
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
   )
 });
 
-// root:port
-app.post('/serialport/api/:port', function (req, res) {
-  if (serialPorts[req.params.port]) {
-    serialPorts[req.params.port].close(function (err) {
-      if (err) res.send({ error: err })
-      delete serialPorts[req.params.port]
-    })
+// api:port
+app.get("/serialport/api/:port", ensureLoggedIn(), function (req, res) {
+  let portIndex = ports.findIndex(port => port.id == req.params.port)
+  if (portIndex > -1) {
+    res.send(ports[portIndex].obj.isOpen)
   }
-  serialPorts[req.params.port] = new serialPort(req.params.port, {
-    baudRate: parseInt(req.body.baudRate)
-  }, function (err) {
-    if (err) res.send({ error: err.message })
-    else {
-      serialPorts[req.params.port].pipe(parser)
-      serialPorts[req.params.port].on("data", function (chunk) {
-        console.log(chunk.toString('utf8'))
-        io.emit("data" + req.params.port, chunk.toString('utf8'))
+  else res.send(false)
+})
+
+app.post('/serialport/api/:port', ensureLoggedIn(), function (req, res) {
+  portDelete(req.params.port, (err) => {
+    if (!err) {
+      new serialPort(req.params.port, {
+        baudRate: parseInt(req.body.baudRate)
+      }, function (err) {
+        if (err) res.send({ error: err.message })
+        else {
+          this.pipe(parser)
+          this.on("data", function (chunk) {
+            io.emit("data" + req.params.port, chunk.toString('utf8'))
+          })
+          ports.push({
+            id: req.params.port,
+            baudRate: req.params.baudRate,
+            writes: [],
+            obj: this
+          })
+          res.send({})
+        }
       })
-      res.send({})
     }
+    else res.send({ error: err })
   })
 });
 
 app.put("/serialport/api/:port", function (req, res) {
-  if (serialPorts[req.params.port]) {
-    serialPorts[req.params.port].write(req.body.buff + "\r", function (err) {
-      serialPorts[req.params.port].drain(function (err) {
-        if (err) { res.send({ error: "Error: POST: /serialport: " + err }) }
-        else res.send({})
-      })
-    })
-  }
-  else res.send({ error: "Port is not opened." })
+  portWrite(req.params.port, req.body.buff, (err) => {
+    if (!err) res.send({})
+    else res.send({ error: err })
+  })
 })
 
 app.delete("/serialport/api/:port", function (req, res) {
-  if (serialPorts[req.params.port]) {
-    serialPorts[req.params.port].close(function (err) {
-      if (err) res.send({ error: "Error: DEL: /serialport: " + err })
-      else {
-        delete serialPorts[req.params.port]
-        res.send({})
-      }
-    })
-  }
-  else {
-    res.send({ error: "Port is not open." })
-  }
+  portDelete(req.params.port, (err) => {
+    if (!err) res.send({})
+    else res.send({ error: err })
+  })
 })
 
+// api:interval:port
 app.get('/serialport/api/interval/:port', function (req, res) {
-  res.send(intervalWrites.filter(item => item.port == req.params.port))
-});
-
-app.post('/serialport/api/interval/:port', function (req, res) {
-  if (serialPorts[req.params.port]) {
-    let options = {
-      id: uniqid(),
-      port: req.params.port,
-      buff: req.body.buff,
-      interval: Number(req.body.interval) || 1000,
-      stop: false
-    }
-    intervalWrites.push(options)
-    interval(async (iteration, stop) => {
-      if (options.stop) stop()
-      await serialWritePromise(options.port, options.buff)
-    }, options.interval, { stopOnError: false })
-    res.send(options)
+  let portIndex = ports.findIndex(port => port.id == req.params.port)
+  if (portIndex > -1) {
+    res.send(ports[portIndex].writes)
   }
   else res.send({ error: "Port is not opened." })
 });
 
-app.delete('/serialport/api/interval/:port/:id', function (req, res) {
-  let index = intervalWrites.findIndex(item => item.id == req.params.id)
-  if (index > -1) {
-    intervalWrites[index].stop = true
-    res.send(intervalWrites.splice(index, 1))
+app.post('/serialport/api/interval/:port/:buff', function (req, res) {
+  portWritePromise(req.params.port, req.params.buff)
+  let portIndex = ports.findIndex(port => port.id == req.params.port)
+  if (portIndex > -1) {
+    let options = {
+      port: req.params.port,
+      buff: req.params.buff,
+      interval: Number(req.body.interval) || 1000,
+      stop: false
+    }
+    ports[portIndex].writes.push(options)
+    interval(async (iteration, stop) => {
+      if (options.stop) stop()
+      await portWritePromise(options.port, options.buff)
+    }, options.interval, { stopOnError: false })
   }
-  else res.send({ error: "not found" })
+  else res.send({ error: "Port is not opened." })
 });
 
+app.delete('/serialport/api/interval/:port/:buff', function (req, res) {
+  let portIndex = ports.findIndex(port => port.id == req.params.port)
+  if (portIndex > -1) {
+    let writeIndex = ports[portIndex].writes.findIndex(write => write.buff == req.params.buff)
+    if(writeIndex > -1){
+      ports[portIndex].writes[writeIndex].stop = true
+      ports[portIndex].writes.splice(writeIndex, 1)
+      res.send({})
+    }
+    else res.send({ error: "Interval write is not found." })
+  }
+  else res.send({ error: "Port is not open or write is not found." })
+});
 
 //=========================================
 // socket

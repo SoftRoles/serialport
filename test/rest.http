@@ -3,18 +3,46 @@
 http://127.0.0.1/serialport/api
 
 ###
-# set intrval for periodic write
-GET http://127.0.0.1/serialport/api/interval/COM1
+# Open port
+POST http://127.0.0.1/serialport/api/COM1
+content-type: application/json
+
+{
+    "baudRate": 38400
+}
 
 ###
-# set intrval for periodic write
-POST http://127.0.0.1/serialport/api/interval/COM1
+# Get port status
+http://127.0.0.1/serialport/api/COM1
+
+###
+# Close port
+DELETE http://127.0.0.1/serialport/api/COM1
+
+
+###
+# Write buffer
+PUT http://127.0.0.1/serialport/api/COM1
 content-type: application/json
 
 {
     "buff": "PFB"
 }
 
+
+###
+# get intrval for periodic write
+GET http://127.0.0.1/serialport/api/interval/COM1
+
+###
+# set intrval for periodic write
+POST http://127.0.0.1/serialport/api/interval/COM1/MH
+content-type: application/json
+
+{
+    "interval": 2000
+}
+
 ###
 # unset intrval for periodic write
-DELETE http://127.0.0.1/serialport/api/interval/COM1/3v9mfrtd04jp17gw64
+DELETE http://127.0.0.1/serialport/api/interval/COM1/MH
