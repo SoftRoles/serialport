@@ -11,15 +11,15 @@
         <input id="chat_input" type="text">
         <input type="submit" value="Send">
     </form>
-    <script src="/jquery/dist/jquery.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
+    <script src="http://127.0.0.1/localcdn/jquery/dist/jquery.js"></script>
+    <script src="http://127.0.0.1/localcdn/socket.io-client/dist/socket.io.js"></script>
 
     <script>
         var socket = io.connect('http://127.0.0.1:3008');
         socket.on('connect', function (data) {
             socket.emit('join', 'Hello World from client');
         });
-        socket.on('broad', function (data) {
+        socket.on('COM6', function (data) {
             $('#future').append(data + "<br/>");
         });
 

@@ -119,15 +119,13 @@ function portWrite(portId, buff, callback) {
   let portIndex = ports.findIndex(port => port.id == portId)
   if (portIndex > -1) {
     ports[portIndex].obj.write(buff + "\r", function (err) {
-      console.log("Here1")
       ports[portIndex].obj.drain(function (err) {
-        console.log("Here2")
         if (err) { callback(err, null) }
         else callback(null, {})
       })
     })
   }
-  else callback()
+  else callback("Port is not opened.")
 }
 const portWritePromise = promisify(portWrite)
 
@@ -146,7 +144,7 @@ function portDelete(portId, callback) {
       }
     })
   }
-  else callback()
+  else callback("Port is not opened.")
 }
 
 
@@ -169,27 +167,24 @@ app.get("/serialport/api/:port", ensureLoggedIn(), function (req, res) {
 
 app.post('/serialport/api/:port', ensureLoggedIn(), function (req, res) {
   portDelete(req.params.port, (err) => {
-    if (!err) {
-      new serialPort(req.params.port, {
-        baudRate: parseInt(req.body.baudRate)
-      }, function (err) {
-        if (err) res.send({ error: err.message })
-        else {
-          this.pipe(parser)
-          this.on("data", function (chunk) {
-            io.emit("data" + req.params.port, chunk.toString('utf8'))
-          })
-          ports.push({
-            id: req.params.port,
-            baudRate: req.params.baudRate,
-            writes: [],
-            obj: this
-          })
-          res.send({})
-        }
-      })
-    }
-    else res.send({ error: err })
+    new serialPort(req.params.port, {
+      baudRate: parseInt(req.body.baudRate)
+    }, function (err) {
+      if (err) res.send({ error: err.message })
+      else {
+        this.pipe(parser)
+        this.on("data", function (chunk) {
+          io.emit(req.params.port, chunk.toString('utf8'))
+        })
+        ports.push({
+          id: req.params.port,
+          baudRate: req.params.baudRate,
+          writes: [],
+          obj: this
+        })
+        res.send({})
+      }
+    })
   })
 });
 
@@ -231,6 +226,7 @@ app.post('/serialport/api/interval/:port/:buff', function (req, res) {
       if (options.stop) stop()
       await portWritePromise(options.port, options.buff)
     }, options.interval, { stopOnError: false })
+    res.send({})
   }
   else res.send({ error: "Port is not opened." })
 });
@@ -239,7 +235,7 @@ app.delete('/serialport/api/interval/:port/:buff', function (req, res) {
   let portIndex = ports.findIndex(port => port.id == req.params.port)
   if (portIndex > -1) {
     let writeIndex = ports[portIndex].writes.findIndex(write => write.buff == req.params.buff)
-    if(writeIndex > -1){
+    if (writeIndex > -1) {
       ports[portIndex].writes[writeIndex].stop = true
       ports[portIndex].writes.splice(writeIndex, 1)
       res.send({})
@@ -252,10 +248,9 @@ app.delete('/serialport/api/interval/:port/:buff', function (req, res) {
 //=========================================
 // socket
 //=========================================
-io.on('connection', function (client) {
+io.on('connection', function (socket) {
   console.log("A client is connected.");
 })
-
 
 server.listen(3008, function () {
   console.log("Service running on http://127.0.0.1:3008")

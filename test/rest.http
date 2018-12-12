@@ -4,7 +4,7 @@ http://127.0.0.1/serialport/api
 
 ###
 # Open port
-POST http://127.0.0.1/serialport/api/COM1
+POST http://127.0.0.1/serialport/api/COM6
 content-type: application/json
 
 {
@@ -13,30 +13,30 @@ content-type: application/json
 
 ###
 # Get port status
-http://127.0.0.1/serialport/api/COM1
+http://127.0.0.1/serialport/api/COM6
 
 ###
 # Close port
-DELETE http://127.0.0.1/serialport/api/COM1
+DELETE http://127.0.0.1/serialport/api/COM6
 
 
 ###
 # Write buffer
-PUT http://127.0.0.1/serialport/api/COM1
+PUT http://127.0.0.1/serialport/api/COM6
 content-type: application/json
 
 {
-    "buff": "PFB"
+    "buff": "MH"
 }
 
 
 ###
 # get intrval for periodic write
-GET http://127.0.0.1/serialport/api/interval/COM1
+GET http://127.0.0.1/serialport/api/interval/COM5
 
 ###
 # set intrval for periodic write
-POST http://127.0.0.1/serialport/api/interval/COM1/MH
+POST http://127.0.0.1/serialport/api/interval/COM6/PFB
 content-type: application/json
 
 {
@@ -45,4 +45,4 @@ content-type: application/json
 
 ###
 # unset intrval for periodic write
-DELETE http://127.0.0.1/serialport/api/interval/COM1/MH
+DELETE http://127.0.0.1/serialport/api/interval/COM6/PFB
