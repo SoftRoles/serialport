@@ -5,40 +5,7 @@ var server = require('http').createServer(app);
 //=========================================
 // authorization check
 //=========================================
-function ensureLoggedIn(options) {
-  if (typeof options == 'string') {
-    options = { redirectTo: options }
-  }
-  options = options || {};
-
-  var url = options.redirectTo || '/login';
-  var setReturnTo = (options.setReturnTo === undefined) ? true : options.setReturnTo;
-
-  return function (req, res, next) {
-    var isLocal = req.ip.indexOf("127.0.0.1") > -1
-    var isToken = req.headers && req.headers.authorization
-      && req.headers.authorization.split(" ").length == 2
-      && /^Bearer$/i.test(req.headers.authorization.split(" ")[0])
-    if (!isLocal && !isToken && (!req.isAuthenticated || !req.isAuthenticated())) {
-      if (setReturnTo && req.session) {
-        req.session.returnTo = req.originalUrl || req.url;
-      }
-      return res.redirect(url);
-    }
-    else {
-      if (isToken) {
-        mongodb.db("auth").collection("users").findOne({ token: req.headers.authorization.split(" ")[1] }, function (err, user) {
-          req.user = err || user || req.user || { username: "local" }
-          next()
-        });
-      }
-      else {
-        req.user = req.user || { username: "local" }
-        next()
-      }
-    }
-  }
-}
+const ensureLogin = require("@softroles/ensure-login").ensureLogin 
 
 //=========================================
 // session
@@ -149,7 +116,7 @@ function portDelete(portId, callback) {
 
 
 // api
-app.get('/serialport/api', ensureLoggedIn(), function (req, res) {
+app.get('/serialport/api', ensureLogin(), function (req, res) {
   serialPort.list().then(
     ports => res.send(ports),
     err => res.send(err)
@@ -157,7 +124,7 @@ app.get('/serialport/api', ensureLoggedIn(), function (req, res) {
 });
 
 // api:port
-app.get("/serialport/api/:port", ensureLoggedIn(), function (req, res) {
+app.get("/serialport/api/:port", ensureLogin(), function (req, res) {
   let portIndex = ports.findIndex(port => port.id == req.params.port)
   if (portIndex > -1) {
     res.send(ports[portIndex].obj.isOpen)
@@ -165,7 +132,7 @@ app.get("/serialport/api/:port", ensureLoggedIn(), function (req, res) {
   else res.send(false)
 })
 
-app.post('/serialport/api/:port', ensureLoggedIn(), function (req, res) {
+app.post('/serialport/api/:port', ensureLogin(), function (req, res) {
   portDelete(req.params.port, (err) => {
     new serialPort(req.params.port, {
       baudRate: parseInt(req.body.baudRate)
